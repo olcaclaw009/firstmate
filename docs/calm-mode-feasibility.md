@@ -287,3 +287,20 @@ ok - Pi calm native E2E keeps Working and captain turns visible, hides exact ope
 $ tests/fm-pi-primary-types.test.sh
 ok - tracked Pi extensions pass strict no-emit typecheck against Pi 0.81.1
 ```
+
+## 2026-07-29 OMP deferral (omp 17.1.8)
+
+Calm is not available on OMP and is deferred to a follow-up.
+`.pi/extensions/fm-calm.ts` stays Pi-only and is intentionally not exposed through the tracked `.omp/extensions` entry files, which carry only the supervision extensions.
+
+The deferral is a feasibility conclusion, not a scheduling one.
+OMP gates which built-ins activate through settings and threads a real `ToolSession` through its tool classes, so a qualifying OMP Calm seam must preserve all five of:
+
+- gated built-in activation,
+- the live loaded settings,
+- plan-mode read-only enforcement,
+- `matcherDigest` and `matcherEntries` for the rule engine,
+- the `hub` session fields (`asyncJobManager`, `agentRegistry`, `getAgentId`).
+
+Re-registering `BUILTIN_TOOLS` as extension tools over a synthetic session defeats all five, so that approach is rejected.
+Any future implementation must still satisfy the [required extension surface](#required-extension-surface) and the [central visibility and input policy](#central-visibility-and-input-policy) above.
