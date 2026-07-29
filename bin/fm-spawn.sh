@@ -60,7 +60,9 @@
 #   harness (config/secondmate-harness -> config/crew-harness -> own), so the
 #   secondmate-vs-crewmate split is DURABLE across every respawn (recovery,
 #   /updatefirstmate, restart). A bare adapter name (claude|codex|opencode|pi|pi-signed|grok|kimi)
-#   overrides it for this spawn (either kind). A non-flag string containing
+#   overrides it for this spawn (either kind). Omp is verified only as a primary
+#   runtime and intentionally has no crewmate or secondmate launch template.
+#   A non-flag string containing
 #   whitespace is treated as a RAW launch command - the escape hatch for verifying
 #   new adapters. pi-signed launches that exact executable name from PATH and
 #   refuses before endpoint creation when it is unavailable; it never falls back to pi.
@@ -487,11 +489,25 @@ case "$ARG3" in
       HARNESS=$("$FM_ROOT/bin/fm-harness.sh" crew)
       harness_src='config/crew-harness'
     fi
-    LAUNCH=$(launch_template "$HARNESS" "$KIND") || { echo "error: no launch template for harness '$HARNESS' (from $harness_src or detection); pass a raw launch command to use an unverified adapter" >&2; exit 1; }
+    if ! LAUNCH=$(launch_template "$HARNESS" "$KIND"); then
+      if [ "$HARNESS" = omp ]; then
+        echo "error: omp is verified only as a primary runtime, not a crewmate or secondmate launch adapter; set config/crew-harness or a dispatch profile to one of claude, codex, opencode, pi, pi-signed, grok, or kimi" >&2
+      else
+        echo "error: no launch template for harness '$HARNESS' (from $harness_src or detection); pass a raw launch command to use an unverified adapter" >&2
+      fi
+      exit 1
+    fi
     ;;
   *)
     HARNESS=$ARG3
-    LAUNCH=$(launch_template "$HARNESS" "$KIND") || { echo "error: unknown harness '$HARNESS'; pass a raw launch command to use an unverified adapter" >&2; exit 1; }
+    if ! LAUNCH=$(launch_template "$HARNESS" "$KIND"); then
+      if [ "$HARNESS" = omp ]; then
+        echo "error: omp is verified only as a primary runtime, not a crewmate or secondmate launch adapter; choose claude, codex, opencode, pi, pi-signed, grok, or kimi for worker launches" >&2
+      else
+        echo "error: unknown harness '$HARNESS'; pass a raw launch command to use an unverified adapter" >&2
+      fi
+      exit 1
+    fi
     ;;
 esac
 
@@ -1505,6 +1521,11 @@ if [ "$KIND" = secondmate ]; then
   sq_home=$(shell_quote "$PROJ_ABS")
   LAUNCH="FM_ROOT_OVERRIDE= FM_STATE_OVERRIDE= FM_DATA_OVERRIDE= FM_PROJECTS_OVERRIDE= FM_CONFIG_OVERRIDE= FM_HOME=$sq_home $LAUNCH"
 fi
+# The pane shell can inherit the primary harness markers from OMP/Claude/Pi/Grok.
+# Clear them at the spawn boundary so a worker launched on one adapter detects
+# its own runtime instead of the primary's runtime.
+spawn_send_text_line "$T" "unset CLAUDECODE OMPCODE PI_CODING_AGENT FM_PI_HARNESS GROK_AGENT"
+sleep 0.3
 # Export GOTMPDIR into the crewmate's pane shell so the agent and every child
 # process (go build, go test, ...) inherit it. Sent before the launch command so
 # the env is set when the agent starts; the brief sleep lets the export land.

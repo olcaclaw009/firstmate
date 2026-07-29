@@ -173,7 +173,8 @@ test_tracked_harness_registration() {
 
   pi_plugin=$(cat "$ROOT/.pi/extensions/fm-primary-turnend-guard.ts")
   assert_contains "$pi_plugin" '["startup", "new", "resume"]' "Pi SessionStart handler has the wrong reason allowlist"
-  assert_contains "$pi_plugin" 'fm-sessionstart-nudge.sh' "Pi SessionStart handler does not invoke the wrapper"
+  assert_contains "$pi_plugin" 'isOmpRuntime && reason === ""' "OMP SessionStart handler does not accept its empty startup reason"
+  assert_contains "$pi_plugin" 'fm-sessionstart-nudge.sh' "Pi/OMP SessionStart handler does not invoke the wrapper"
   assert_contains "$pi_plugin" 'firstmate-sessionstart-nudge' "Pi SessionStart handler does not inject a custom context message"
   assert_contains "$pi_plugin" 'details: { kind: "session-start" }' "Pi SessionStart context does not retain its exact structured kind"
   assert_contains "$pi_plugin" 'pi.sendMessage' "Pi SessionStart handler does not use the context-safe message API"
@@ -183,7 +184,11 @@ test_tracked_harness_registration() {
   assert_contains "$opencode_plugin" 'fm-sessionstart-nudge.sh' "OpenCode plugin does not invoke the wrapper"
   assert_contains "$opencode_plugin" 'promptAsync' "OpenCode plugin does not prompt the nudge turn"
 
-  pass "all five verified harnesses register the shared session-start nudge"
+  [ -L "$ROOT/.omp/extensions" ] || fail "OMP extension discovery symlink is not registered"
+  [ "$(readlink "$ROOT/.omp/extensions")" = ../.pi/extensions ] || \
+    fail "OMP extension discovery symlink does not expose the shared primary extension"
+
+  pass "all verified primary harnesses register the shared session-start nudge"
 }
 
 test_genuine_primary_nudges

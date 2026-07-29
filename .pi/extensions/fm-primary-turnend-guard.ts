@@ -7,6 +7,8 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { encodeFirstmateOperationalInput } from "./lib/fm-operational-input.ts";
 
 let guardFollowupActive = false;
+let ompGuardContinuationActive = false;
+const isOmpRuntime = process.env.OMPCODE === "1";
 
 type LockOwnership = "owned" | "missing" | "other";
 
@@ -105,10 +107,21 @@ function runCdCheck(command: string): Promise<{ code: number; stderr: string }> 
   return runChecker("fm-cd-pretool-check.sh", command);
 }
 
+function blindTurnContent(stderr: string): string {
+  return encodeFirstmateOperationalInput(
+    "turn-end-guard",
+    "TURN WOULD END BLIND - supervision is off. " +
+      "The watcher cycle is missing, failed, or unhealthy. Follow the harness recovery instruction below before ending the turn.\n\n" +
+      stderr,
+  );
+}
+
 export default function (pi: ExtensionAPI) {
   pi.on?.("session_start", (event) => {
     const reason = String((event as { reason?: unknown }).reason ?? "");
-    const nudge = ["startup", "new", "resume"].includes(reason) ? runSessionstartNudge() : "";
+    const shouldNudge = ["startup", "new", "resume"].includes(reason) ||
+      (isOmpRuntime && reason === "");
+    const nudge = shouldNudge ? runSessionstartNudge() : "";
     markLoaded();
     if (!nudge) return;
     try {
@@ -146,16 +159,28 @@ export default function (pi: ExtensionAPI) {
 
     guardFollowupActive = true;
     try {
-      const content = encodeFirstmateOperationalInput(
-        "turn-end-guard",
-        "TURN WOULD END BLIND - supervision is off. " +
-          "The watcher cycle is missing, failed, or unhealthy. Follow the harness recovery instruction below before ending the turn.\n\n" +
-          result.stderr,
-      );
+      const content = blindTurnContent(result.stderr);
       await pi.sendUserMessage(content, { deliverAs: "followUp" });
     } catch {
       guardFollowupActive = false;
     }
+  });
+
+  pi.on?.("session_stop", async () => {
+    if (!isOmpRuntime) return {};
+    if (ompGuardContinuationActive) {
+      ompGuardContinuationActive = false;
+      return {};
+    }
+
+    const result = await runGuard();
+    if (result.code !== 2) return {};
+
+    ompGuardContinuationActive = true;
+    return {
+      continue: true,
+      additionalContext: blindTurnContent(result.stderr),
+    };
   });
 
   markLoaded();

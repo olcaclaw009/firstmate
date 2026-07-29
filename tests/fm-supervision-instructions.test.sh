@@ -103,6 +103,14 @@ test_cross_harness_ordinary_continuation_and_repair_matrix() {
   assert_contains "$out" "Grok tracked background task" "grok recovery line lost its tracked background repair"
   assert_contains "$out" "bin/fm-watch-arm.sh" "grok recovery line lost the arm command"
 
+  out=$("$RENDER" --harness omp)
+  ordinary=$(printf '%s\n' "$out" | grep -F -- '- Ordinary wake:')
+  assert_contains "$ordinary" "OMP hub process" "omp ordinary-wake line does not use the hub process protocol"
+  assert_not_contains "$ordinary" "fm_watch_arm_pi" "omp ordinary-wake line incorrectly calls the Pi watcher tool"
+  out=$("$RENDER" --harness omp --repair-line)
+  assert_contains "$out" "OMP hub process protocol" "omp recovery line lost the hub process protocol"
+  assert_not_contains "$out" "fm_watch_arm_pi" "omp recovery line incorrectly calls the Pi watcher tool"
+
   out=$("$RENDER" --harness codex)
   ordinary=$(printf '%s\n' "$out" | grep -F -- '- Ordinary wake:')
   assert_contains "$ordinary" "next foreground" "codex ordinary-wake line lost its foreground checkpoint"
@@ -145,6 +153,29 @@ test_grok_is_background_notify() {
   pass "grok supervision is Claude-shaped background notify with passive Stop-hook backstop"
 }
 
+test_omp_is_hub_process_supervision() {
+  local home out turnend watch
+  home="$TMP_ROOT/omp-home"
+  turnend="$ROOT/.omp/extensions/fm-primary-turnend-guard.ts"
+  watch="$ROOT/.omp/extensions/fm-primary-pi-watch.ts"
+  mkdir -p "$home/state" "$home/config"
+  out=$(FM_HOME="$home" "$RENDER" --harness omp)
+  assert_contains "$out" "primary harness: omp" "omp heading missing"
+  assert_contains "$out" "Mode: OMP hub process supervision." "omp snippet missing hub process mode"
+  assert_contains "$out" "hub" "omp snippet does not name the hub tool"
+  assert_contains "$out" "op" "omp snippet lost the hub operation vocabulary"
+  assert_contains "$out" "bin/fm-watch-arm.sh --restart" "omp snippet lost the watcher arm command"
+  assert_contains "$out" "session_stop" "omp snippet lost the turn-end continuation boundary"
+  assert_contains "$out" "The turn-end guard extension lives at \`$turnend\`" "omp snippet did not render the OMP turn-end extension path"
+  assert_contains "$out" "The watcher extension lives at \`$watch\`" "omp snippet did not render the OMP watcher extension path"
+  assert_not_contains "$out" "Mode: Claude Stop-hook-owned supervision." "omp must not render Claude's Stop protocol"
+  assert_not_contains "$out" "Mode: Unknown harness fallback." "omp must not render the unknown fallback"
+  assert_not_contains "$out" "fm_watch_arm_pi" "omp protocol must not use the Pi-only watcher tool"
+  assert_not_contains "$out" "__FM_PI_EXT__" "renderer leaked the extension path placeholder"
+  assert_not_contains "$out" "__FM_PI_TURNEND_EXT__" "renderer leaked the turn-end extension path placeholder"
+  pass "omp supervision uses the verified hub process protocol and OMP extension paths"
+}
+
 test_grok_command_sources_effective_config() {
   local home config out
   home="$TMP_ROOT/grok-home"
@@ -178,5 +209,6 @@ test_repair_lines
 test_cross_harness_ordinary_continuation_and_repair_matrix
 test_pi_signed_preserves_identity_with_pi_supervision_protocol
 test_grok_is_background_notify
+test_omp_is_hub_process_supervision
 test_grok_command_sources_effective_config
 test_pi_snippet_uses_effective_extension_path

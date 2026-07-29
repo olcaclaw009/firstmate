@@ -81,15 +81,23 @@ if [ -z "$HARNESS" ]; then
 fi
 
 case "$HARNESS" in
-  claude|codex|opencode|pi|grok) SNIPPET="$DOC_DIR/$HARNESS.md" ;;
+  claude|codex|opencode|pi|grok|omp) SNIPPET="$DOC_DIR/$HARNESS.md" ;;
   pi-signed) SNIPPET="$DOC_DIR/pi.md" ;;
   *) HARNESS=unknown; SNIPPET="$DOC_DIR/unknown.md" ;;
 esac
 [ -f "$SNIPPET" ] || SNIPPET="$DOC_DIR/unknown.md"
 
 checkpoint_seconds=${FM_CODEX_WATCH_CHECKPOINT:-180}
-pi_ext="$FM_ROOT/.pi/extensions/fm-primary-pi-watch.ts"
-pi_turnend_ext="$FM_ROOT/.pi/extensions/fm-primary-turnend-guard.ts"
+case "$HARNESS" in
+  omp)
+    pi_ext="$FM_ROOT/.omp/extensions/fm-primary-pi-watch.ts"
+    pi_turnend_ext="$FM_ROOT/.omp/extensions/fm-primary-turnend-guard.ts"
+    ;;
+  *)
+    pi_ext="$FM_ROOT/.pi/extensions/fm-primary-pi-watch.ts"
+    pi_turnend_ext="$FM_ROOT/.pi/extensions/fm-primary-turnend-guard.ts"
+    ;;
+esac
 x_mode_env="$CONFIG/x-mode.env"
 
 shell_quote() {
@@ -149,6 +157,9 @@ repair_line() {
     grok)
       printf '%s%s\n' "$prefix" 'repair missing watcher supervision with bin/fm-watch-arm.sh as its own Grok tracked background task, never shell &.'
       ;;
+    omp)
+      printf '%s%s\n' "$prefix" 'repair missing watcher supervision with the OMP hub process protocol from the session-start block, never shell &.'
+      ;;
     *)
       printf '%s%s\n' "$prefix" 'repair missing watcher supervision according to the session-start block for this harness; do not use shell &.'
       ;;
@@ -171,6 +182,9 @@ ordinary_wake_line() {
       ;;
     grok)
       printf '%s\n' '- Ordinary wake: re-arm exactly one bin/fm-watch-arm.sh Grok tracked background task as directed below.'
+      ;;
+    omp)
+      printf '%s\n' '- Ordinary wake: re-arm exactly one OMP hub process supervision wait as directed below.'
       ;;
     *)
       printf '%s\n' '- Ordinary wake: follow the continuation in the harness protocol below; do not use shell &.'

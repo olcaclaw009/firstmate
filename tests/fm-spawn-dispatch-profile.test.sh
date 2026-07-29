@@ -27,6 +27,9 @@ case "${1:-}" in
   list-windows) exit 0 ;;
   has-session|new-session|new-window|kill-window) exit 0 ;;
   send-keys)
+    if [ -n "${FM_FAKE_KEY_LOG:-}" ]; then
+      printf '%s\n' "$*" >> "$FM_FAKE_KEY_LOG"
+    fi
     if [ -n "${FM_FAKE_LAUNCH_LOG:-}" ]; then
       prev=
       for a in "$@"; do
@@ -93,6 +96,7 @@ run_spawn() {
     FM_PROJECTS_OVERRIDE="$home/projects" FM_CONFIG_OVERRIDE="$home/config" \
     FM_SPAWN_NO_GUARD=1 FM_FAKE_PANE_PATH="$wt" TMUX="fake,1,0" \
     CLAUDE_CONFIG_DIR="${FM_TEST_CLAUDE_CONFIG_DIR:-}" \
+    FM_FAKE_KEY_LOG="${FM_TEST_FAKE_KEY_LOG:-}" \
     FM_FAKE_LAUNCH_LOG="$launchlog" GROK_HOME="$home/grok-home" PATH="$fakebin:$PATH" \
     "$SPAWN" "$@" 2>&1
 }
@@ -490,6 +494,47 @@ test_non_claude_harness_ignores_config_dir() {
   pass "non-claude harnesses do not receive the claude CLAUDE_CONFIG_DIR prefix"
 }
 
+test_omp_primary_default_worker_refuses_actionably() {
+  local rec id out status
+  id=profile-omp-default-z21
+  rec=$(make_spawn_case profile-omp-default claude "$id")
+  read_case_record "$rec"
+  rm -f "$HOME_DIR/config/crew-harness"
+
+  out=$(OMPCODE=1 CLAUDECODE=1 \
+    run_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" "$id" "$PROJ_DIR" 2>&1)
+  status=$?
+  expect_code 1 "$status" "omp primary with absent crew-harness should refuse worker spawn"
+  assert_contains "$out" "omp is verified only as a primary runtime" \
+    "omp primary refusal did not explain the primary-only boundary"
+  assert_contains "$out" "set config/crew-harness or a dispatch profile" \
+    "omp primary refusal did not name the actionable configuration fix"
+  assert_absent "$HOME_DIR/state/$id.meta" "omp primary refusal wrote task metadata"
+  [ ! -s "$LAUNCH_LOG" ] || fail "omp primary refusal typed a launch command"
+  pass "omp primary default worker resolution refuses actionably instead of launching an unspawnable adapter"
+}
+
+test_spawn_scrubs_primary_harness_markers_before_launch() {
+  local rec id out status keylog launch
+  id=profile-marker-scrub-z20
+  rec=$(make_spawn_case profile-marker-scrub codex "$id")
+  read_case_record "$rec"
+  keylog="$CASE_DIR/key.log"
+
+  out=$(OMPCODE=1 CLAUDECODE=1 PI_CODING_AGENT=true FM_PI_HARNESS=pi-signed GROK_AGENT=1 \
+    FM_TEST_FAKE_KEY_LOG="$keylog" \
+    run_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" "$id" "$PROJ_DIR")
+  status=$?
+  expect_code 0 "$status" "codex spawn with inherited primary markers should succeed"
+  assert_contains "$out" "spawned $id harness=codex" "codex spawn did not report success"
+  assert_contains "$(cat "$keylog")" "unset CLAUDECODE OMPCODE PI_CODING_AGENT FM_PI_HARNESS GROK_AGENT" \
+    "spawn did not clear primary harness markers before launch"
+  launch=$(cat "$LAUNCH_LOG")
+  assert_contains "$launch" "codex --dangerously-bypass-approvals-and-sandbox" \
+    "launch command was not still the selected worker harness"
+  pass "fm-spawn clears inherited primary harness markers before starting the worker runtime"
+}
+
 test_active_dispatch_profile_does_not_block_secondmate_launch() {
   local rec id sm out status
   id=profile-secondmate-z16
@@ -529,6 +574,8 @@ test_batch_forwards_shared_profile_flags
 test_claude_forwards_firstmate_config_dir_when_set
 test_claude_omits_config_dir_prefix_when_unset
 test_non_claude_harness_ignores_config_dir
+test_omp_primary_default_worker_refuses_actionably
+test_spawn_scrubs_primary_harness_markers_before_launch
 test_active_dispatch_profile_does_not_block_secondmate_launch
 
 echo "# all fm-spawn-dispatch-profile tests passed"

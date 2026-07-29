@@ -16,6 +16,8 @@ set -u
 # shellcheck source=/dev/null
 . "$ROOT/bin/fm-supervision-lib.sh"
 
+unset OMPCODE PI_CODING_AGENT FM_PI_HARNESS GROK_AGENT
+
 TMP_ROOT=$(fm_test_tmproot fm-turnend-guard)
 fm_git_identity fmtest fmtest@example.invalid
 
@@ -968,6 +970,83 @@ EOF
   pass ".pi primary extension: no-tool and multi-tool runs each inject exactly one guard follow-up"
 }
 
+test_pi_extension_omp_session_stop_continuation() {
+  local repo out status
+  if ! command -v node >/dev/null 2>&1; then
+    echo "skip: node not found for OMP session_stop extension test"
+    return 0
+  fi
+
+  repo="$TMP_ROOT/pi-extension-omp-session-stop"
+  mkdir -p "$repo/.pi/extensions/lib" "$repo/bin" "$repo/state"
+  cp "$ROOT/.pi/extensions/fm-primary-turnend-guard.ts" "$repo/.pi/extensions/fm-primary-turnend-guard.ts"
+  cp "$ROOT/.pi/extensions/lib/fm-operational-input.ts" "$repo/.pi/extensions/lib/fm-operational-input.ts"
+  cp "$ROOT/bin/fm-operational-input.sh" "$repo/bin/fm-operational-input.sh"
+  chmod +x "$repo/bin/fm-operational-input.sh"
+  cat > "$repo/bin/fm-turnend-guard.sh" <<'SH'
+#!/usr/bin/env bash
+set -u
+printf 'call\n' >> "$FM_GUARD_CALLS"
+printf 'OMP_BLOCK_REASON\n' >&2
+exit 2
+SH
+  cat > "$repo/bin/fm-sessionstart-nudge.sh" <<'SH'
+#!/usr/bin/env bash
+exit 0
+SH
+  chmod +x "$repo/bin/fm-turnend-guard.sh" "$repo/bin/fm-sessionstart-nudge.sh"
+
+  out=$(cd "$repo" && \
+    OMPCODE=1 FM_HOME="$repo" FM_STATE_OVERRIDE="$repo/state" FM_GUARD_CALLS="$repo/guard.calls" \
+    node --input-type=module 2>&1 <<'JS'
+import { readFileSync } from "node:fs";
+import { pathToFileURL } from "node:url";
+
+const extension = await import(
+  `${pathToFileURL(`${process.cwd()}/.pi/extensions/fm-primary-turnend-guard.ts`).href}?omp=${Date.now()}`
+);
+const handlers = new Map();
+const pi = {
+  on(event, handler) {
+    handlers.set(event, handler);
+  },
+};
+extension.default(pi);
+const stop = handlers.get("session_stop");
+if (typeof stop !== "function") throw new Error("session_stop handler was not registered");
+
+const first = await stop({});
+if (first?.continue !== true) {
+  throw new Error(`first stop did not request continuation: ${JSON.stringify(first)}`);
+}
+if (!String(first.additionalContext).includes("OMP_BLOCK_REASON")) {
+  throw new Error(`continuation omitted guard reason: ${JSON.stringify(first)}`);
+}
+if (!String(first.additionalContext).includes("FIRSTMATE_OP:")) {
+  throw new Error("continuation was not encoded as Firstmate operational input");
+}
+
+const second = await stop({});
+if (second?.continue) {
+  throw new Error(`second stop should be allowed by the latch: ${JSON.stringify(second)}`);
+}
+const callsAfterSecond = readFileSync("guard.calls", "utf8").trim().split("\n").length;
+if (callsAfterSecond !== 1) {
+  throw new Error(`latch reran guard during the forced follow-up stop: ${callsAfterSecond}`);
+}
+
+const third = await stop({});
+if (third?.continue !== true) {
+  throw new Error(`third stop did not reset after the allowed stop: ${JSON.stringify(third)}`);
+}
+JS
+)
+  status=$?
+  [ "$status" -eq 0 ] || fail ".pi primary extension OMP session_stop continuation failed: $out"
+  [ -z "$out" ] || fail ".pi primary extension OMP session_stop test printed output: $out"
+  pass ".pi primary extension: OMP session_stop forces one bounded continuation and then allows the follow-up stop"
+}
+
 test_pi_extension_retries_after_followup_delivery_failure() {
   local repo home ext out status
   repo="$TMP_ROOT/pi-delivery-failure-root"
@@ -1232,6 +1311,7 @@ test_opencode_plugin_forces_followup
 test_opencode_plugin_anchors_guard_to_worktree
 test_pi_extension_forces_followup
 test_pi_extension_injects_once_per_logical_agent_run
+test_pi_extension_omp_session_stop_continuation
 test_pi_extension_retries_after_followup_delivery_failure
 test_grok_hook_invokes_adapter
 test_hook_claude_mode_reblocks_stop_hook_active_when_unhealthy
