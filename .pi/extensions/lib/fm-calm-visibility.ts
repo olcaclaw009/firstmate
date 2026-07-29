@@ -84,45 +84,13 @@ export function calmPresentationHides(itemClass: CalmTranscriptClass): boolean {
 }
 
 export function registerFirstmateSyntheticPresentation(pi: ExtensionAPI): void {
-  const renderPresentation = (entry: {
-    data?: unknown;
-    content?: unknown;
-    details?: unknown;
-  }) => {
-    if (calmPresentationHides("synthetic-user")) return undefined;
-    const data = (entry.data ?? entry.details ?? entry.content) as
-      | Partial<FirstmateSyntheticPresentation>
-      | string
-      | undefined;
-    const content = typeof data === "string" ? data : data?.content;
-    if (typeof content !== "string") return undefined;
-    return new UserMessageComponent(content, getMarkdownTheme());
-  };
-
-  const rendererHost = pi as ExtensionAPI & {
-    registerEntryRenderer?: <T>(
-      customType: string,
-      renderer: (entry: { data?: T }) => UserMessageComponent | undefined,
-    ) => void;
-    registerMessageRenderer?: (
-      customType: string,
-      renderer: (message: { data?: unknown; content?: unknown; details?: unknown }) =>
-        | UserMessageComponent
-        | undefined,
-    ) => void;
-  };
-
-  if (typeof rendererHost.registerEntryRenderer === "function") {
-    rendererHost.registerEntryRenderer<FirstmateSyntheticPresentation>(
-      FIRSTMATE_SYNTHETIC_PRESENTATION_TYPE,
-      renderPresentation,
-    );
-    return;
-  }
-  if (typeof rendererHost.registerMessageRenderer === "function") {
-    rendererHost.registerMessageRenderer(
-      FIRSTMATE_SYNTHETIC_PRESENTATION_TYPE,
-      renderPresentation,
-    );
-  }
+  pi.registerEntryRenderer<FirstmateSyntheticPresentation>(
+    FIRSTMATE_SYNTHETIC_PRESENTATION_TYPE,
+    (entry) => {
+      if (calmPresentationHides("synthetic-user")) return undefined;
+      const data = entry.data;
+      if (!data || typeof data.content !== "string") return undefined;
+      return new UserMessageComponent(data.content, getMarkdownTheme());
+    },
+  );
 }

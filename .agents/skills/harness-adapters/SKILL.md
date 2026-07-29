@@ -104,7 +104,7 @@ Claude's Stop `asyncRewake` hook (`bin/fm-claude-stop-autoarm.sh`) owns tokenles
 Codex uses bounded foreground checkpoints through `bin/fm-watch-checkpoint.sh` because Codex cannot reason while a foreground tool call is running.
 OpenCode uses `.opencode/plugins/fm-primary-watch-arm.js`, which coordinates with the turn-end guard plugin and wakes the TUI with `client.session.promptAsync`.
 Pi and pi-signed use the tracked `.pi/extensions/fm-primary-turnend-guard.ts` plus the tracked `.pi/extensions/fm-primary-pi-watch.ts`, both project-local extensions the Pi engine auto-discovers once trusted.
-Omp discovers the same tracked files through `.omp/extensions -> ../.pi/extensions`, uses `session_stop` as the turn-end backstop, and uses OMP `hub` process `start` plus `wait` for the normal watcher cycle instead of the Pi-only `fm_watch_arm_pi` tool.
+Omp discovers the same two tracked files through per-file symlinks in `.omp/extensions`, uses `session_stop` as the turn-end backstop, and uses OMP `hub` process `start` plus `wait` for the normal watcher cycle instead of the Pi-only `fm_watch_arm_pi` tool.
 When changing any primary watcher adapter, update `docs/supervision-protocols/`, `docs/turnend-guard.md` if a shared idle or turn-end hook changed, and the relevant concise fact below.
 
 ## Launch profile axes
@@ -314,10 +314,14 @@ If firstmate runs on OMP and no concrete worker adapter is configured, `fm-spawn
 |---|---|
 | Own-runtime env marker | `OMPCODE=1`; OMP also sets `CLAUDECODE=1`, so `OMPCODE` precedence is load-bearing. |
 | Process ancestry | `omp` -> `-zsh` -> terminal for tool calls; session-lock ancestry accepts exact `omp` and uses `basename --` for leading-dash shells. |
-| Extension discovery | OMP discovers `.omp/extensions`; this repo tracks `.omp/extensions -> ../.pi/extensions` so the shared Firstmate extensions load without duplicating files. |
+| Extension discovery | OMP discovers `.omp/extensions`; this repo tracks one per-file symlink there for each shared supervision extension (`fm-primary-turnend-guard.ts`, `fm-primary-pi-watch.ts`) so exactly those load without duplicating files. |
 | Turn-end guard | The shared primary extension uses OMP's `session_stop` continuation to force one bounded follow-up when `bin/fm-turnend-guard.sh` returns 2. |
 | Watcher protocol | `docs/supervision-protocols/omp.md` owns the OMP `hub` process `start` plus `wait` cycle around `bin/fm-watch-arm.sh --restart`. |
-| Calm presentation | OMP uses `BUILTIN_TOOLS`/component presentation APIs rather than Pi's per-tool definition factories; `.pi/extensions/fm-calm.ts` switches only the adapter layer and keeps the same `config/calm` preference. |
+| Calm presentation | Not available on OMP and deferred to a follow-up; `.pi/extensions/fm-calm.ts` stays Pi-only and is intentionally not exposed to OMP. |
+
+Calm is deferred because OMP gates which built-ins activate through settings and threads a real `ToolSession` through its tool classes.
+An OMP Calm seam must preserve gated activation, the live loaded settings, plan-mode read-only enforcement, `matcherDigest`/`matcherEntries` for the rule engine, and the `hub` session fields (`asyncJobManager`, `agentRegistry`, `getAgentId`).
+Re-registering `BUILTIN_TOOLS` as extension tools over a synthetic session defeats all five, so that approach is rejected.
 
 ## grok (VERIFIED 2026-06-29, grok 0.2.73; slash-submit re-verified 2026-07-03 on 0.2.82; reasoning-effort ceiling re-verified 2026-07-13 on 0.2.99; exit paths re-verified 2026-07-19 on grok 0.2.103)
 

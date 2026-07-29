@@ -90,18 +90,23 @@ test_omp_session_lock_identity() {
 }
 
 test_omp_extension_contract() {
-  local calm symlink_target
-  calm=$(cat "$ROOT/.pi/extensions/fm-calm.ts")
-  [ -L "$ROOT/.omp/extensions" ] || fail "OMP extension discovery symlink is missing"
-  symlink_target=$(readlink "$ROOT/.omp/extensions")
-  [ "$symlink_target" = ../.pi/extensions ] || \
-    fail "OMP extension discovery symlink points to '$symlink_target'"
-  assert_contains "$calm" "BUILTIN_TOOLS" "Calm does not use OMP's built-in tool registry"
-  assert_contains "$calm" "ompRendererExportName" "Calm does not compose OMP standalone tool renderers"
-  assert_contains "$calm" "mergeCallAndResult" "Calm does not preserve OMP renderer merge semantics"
-  assert_not_contains "$calm" "installOmpToolRendererLayout" \
-    "Calm still patches detached OMP renderer exports instead of re-registering tools"
-  pass "OMP primary extensions share the Pi files and Calm uses the registered-tool renderer seam"
+  local name target entry count
+  [ -d "$ROOT/.omp/extensions" ] || fail "OMP extension discovery directory is missing"
+  [ -L "$ROOT/.omp/extensions" ] && fail "OMP extension discovery must not be a directory symlink"
+  for name in fm-primary-turnend-guard.ts fm-primary-pi-watch.ts; do
+    [ -L "$ROOT/.omp/extensions/$name" ] || fail "OMP extension symlink for $name is missing"
+    target=$(readlink "$ROOT/.omp/extensions/$name")
+    [ "$target" = "../../.pi/extensions/$name" ] || \
+      fail "OMP extension symlink for $name points to '$target'"
+  done
+  count=0
+  for entry in "$ROOT/.omp/extensions"/*; do
+    [ -e "$entry" ] || continue
+    count=$((count + 1))
+  done
+  [ "$count" -eq 2 ] || \
+    fail "OMP extension directory exposes $count entries, expected only the two supervision extensions"
+  pass "OMP exposes exactly the two shared supervision extensions through per-file symlinks"
 }
 
 test_omp_extensions_load() {
@@ -115,7 +120,6 @@ test_omp_extensions_load() {
   out=$(cd /tmp && \
     FM_HOME="$home" FM_STATE_OVERRIDE="$home/state" FM_ROOT_OVERRIDE="$ROOT" \
     omp -p --max-time=30 --no-session --no-tools \
-      -e "$ROOT/.omp/extensions/fm-calm.ts" \
       -e "$ROOT/.omp/extensions/fm-primary-turnend-guard.ts" \
       -e "$ROOT/.omp/extensions/fm-primary-pi-watch.ts" \
       "reply exactly OMP_EXT_OK" 2>&1)
@@ -123,11 +127,12 @@ test_omp_extensions_load() {
   expect_code 0 "$status" "OMP extension-load smoke should succeed: $out"
   assert_contains "$out" "OMP_EXT_OK" "OMP extension-load smoke did not complete the prompt"
   assert_not_contains "$out" "Failed to load extension" "OMP reported an extension load failure"
+  assert_not_contains "$out" "Extension error" "OMP reported an extension runtime error"
   assert_present "$home/state/.pi-turnend-extension-loaded" \
     "OMP did not load the shared turn-end extension"
   assert_present "$home/state/.pi-watch-extension-loaded" \
     "OMP did not load the shared watcher extension"
-  pass "OMP loads the shared Calm, turn-end, and watcher extensions without errors"
+  pass "OMP loads both shared supervision extensions with zero load errors"
 }
 
 test_omp_env_marker_precedes_claudecode

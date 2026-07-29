@@ -19,4 +19,4 @@ It has a `session_stop` extension continuation hook, which the tracked turn-end 
 
 The turn-end guard extension lives at `__FM_PI_TURNEND_EXT__`.
 The watcher extension lives at `__FM_PI_EXT__` and is loaded for shared Firstmate extension support, but the OMP supervision protocol above uses `hub` rather than the Pi-only watcher tool.
-Both files are exposed to OMP through the tracked `.omp/extensions` symlink.
+Both files are exposed to OMP through tracked per-file symlinks in `.omp/extensions`, which are the only extensions OMP discovers from this repo.
