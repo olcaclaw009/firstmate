@@ -312,9 +312,9 @@ If firstmate runs on OMP and no concrete worker adapter is configured, `fm-spawn
 
 | Fact | Value |
 |---|---|
-| Own-runtime env marker | `OMPCODE=1`; OMP also sets `CLAUDECODE=1`, so `OMPCODE` precedence is load-bearing. |
+| Own-runtime env marker | `OMPCODE=1` in the shells OMP spawns for tool calls; OMP also sets `CLAUDECODE=1`, so `OMPCODE` precedence is load-bearing. OMP does NOT set it in its own extension-host process, so extension code cannot detect OMP from the environment. |
 | Process ancestry | `omp` -> `-zsh` -> terminal for tool calls; session-lock ancestry accepts exact `omp` and uses `basename --` for leading-dash shells. |
-| Extension discovery | OMP auto-discovers regular `*.ts` files in `.omp/extensions`; this repo tracks one delegating entry file per shared supervision extension (`fm-primary-turnend-guard.ts`, `fm-primary-pi-watch.ts`) that re-exports the `.pi` implementation, so exactly those two load without duplicating logic. |
+| Extension discovery | OMP auto-discovers regular `*.ts` files in `.omp/extensions`; this repo tracks one delegating entry file per shared supervision extension (`fm-primary-turnend-guard.ts`, `fm-primary-pi-watch.ts`) that calls the `.pi` implementation with `{ runtime: "omp" }`, so exactly those two load without duplicating logic and being loaded from here is what tells the shared code it is on OMP. |
 | Watcher tool | The shared watcher extension is marker-only on OMP: it registers no `fm_watch_arm_pi` tool or `/fm-watch-arm-pi` command there, so the `hub` protocol is the single owner of the watcher cycle. |
 | Turn-end guard | The shared primary extension uses OMP's `session_stop` continuation to force one bounded follow-up when `bin/fm-turnend-guard.sh` returns 2. |
 | Watcher protocol | `docs/supervision-protocols/omp.md` owns the OMP `hub` process `start` plus `wait` cycle around `bin/fm-watch-arm.sh --restart`. |

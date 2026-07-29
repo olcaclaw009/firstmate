@@ -5,10 +5,6 @@ set -u
 # shellcheck source=tests/lib.sh
 . "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
-# The shared watcher extension this suite renders is marker-only under OMPCODE,
-# so an ambient OMP marker would strip the fm_watch_arm_pi tool row.
-unset OMPCODE
-
 TMP_ROOT=$(fm_test_tmproot fm-calm-pi-extension)
 EXT="$ROOT/.pi/extensions/fm-calm.ts"
 ASSISTANT_LAYOUT="$ROOT/.pi/extensions/lib/fm-calm-assistant-layout.ts"

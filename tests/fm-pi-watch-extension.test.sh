@@ -5,11 +5,6 @@ set -u
 # shellcheck source=tests/lib.sh
 . "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
-# The shared watcher extension is marker-only under OMPCODE, so an ambient OMP
-# marker would make every Pi case load the OMP path. Cases that want the OMP
-# path set OMPCODE themselves.
-unset OMPCODE
-
 TMP_ROOT=$(fm_test_tmproot fm-pi-watch-extension)
 EXT="$ROOT/.pi/extensions/fm-primary-pi-watch.ts"
 # Node 24 warns when these test-only dynamic imports load tracked ESM plugins
@@ -1243,15 +1238,18 @@ test_omp_runtime_marks_loaded_without_pi_watch_tool() {
   local repo home plugin out status
   repo="$TMP_ROOT/omp-marker-only-root"
   home="$TMP_ROOT/omp-marker-only-home"
-  mkdir -p "$repo/bin" "$home/state" "$home/config"
+  mkdir -p "$repo/bin" "$repo/.omp/extensions" "$home/state" "$home/config"
   install_pi_watch_extension_fixture "$repo"
-  plugin="$repo/.pi/extensions/fm-primary-pi-watch.ts"
+  # OMP never sets OMPCODE inside its own extension host, so the OMP path must
+  # come from loading through the tracked .omp/extensions entry alone.
+  cp "$ROOT/.omp/extensions/fm-primary-pi-watch.ts" "$repo/.omp/extensions/fm-primary-pi-watch.ts"
+  plugin="$repo/.omp/extensions/fm-primary-pi-watch.ts"
   cat > "$repo/bin/fm-watch-arm.sh" <<'SH'
 #!/usr/bin/env bash
 printf 'armed\n' >> "$FM_ARM_LOG"
 SH
   chmod +x "$repo/bin/fm-watch-arm.sh"
-  out=$(PLUGIN="$plugin" OMPCODE=1 FM_HOME="$home" FM_ROOT_OVERRIDE="$repo" \
+  out=$(PLUGIN="$plugin" FM_HOME="$home" FM_ROOT_OVERRIDE="$repo" \
     FM_ARM_LOG="$TMP_ROOT/omp-marker-only-arm.log" node --input-type=module 2>&1 <<'EOF'
 import { existsSync, writeFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";

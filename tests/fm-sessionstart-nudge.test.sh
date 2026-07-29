@@ -187,7 +187,7 @@ test_tracked_harness_registration() {
   [ -f "$ROOT/.omp/extensions/fm-primary-turnend-guard.ts" ] || \
     fail "OMP extension discovery entry is not registered"
   assert_contains "$(cat "$ROOT/.omp/extensions/fm-primary-turnend-guard.ts")" \
-    'export { default } from "../../.pi/extensions/fm-primary-turnend-guard.ts"' \
+    'import extension from "../../.pi/extensions/fm-primary-turnend-guard.ts"' \
     "OMP extension discovery entry does not expose the shared primary extension"
 
   pass "all verified primary harnesses register the shared session-start nudge"

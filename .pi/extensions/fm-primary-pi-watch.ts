@@ -96,11 +96,6 @@ const armReadyTimeoutMs = positiveInteger(
   process.platform === "win32" ? 35000 : 12000,
 );
 const armRetireTimeoutMs = positiveInteger("FM_WATCH_ARM_RETIRE_TIMEOUT_MS", 1000);
-// OMP loads this extension only for the shared load marker and session lifecycle.
-// OMP watcher supervision is owned by the hub process protocol in
-// docs/supervision-protocols/omp.md, so the Pi-only arm tool and command stay
-// unregistered there and no arm child is ever extension-owned on OMP.
-const isOmpRuntime = process.env.OMPCODE === "1";
 const repairOnlyHint = "call fm_watch_arm_pi again only after a later notification says the cycle is missing, failed, or unhealthy";
 const shuttingDownMessage = "watcher: not armed - Pi session is shutting down";
 
@@ -222,7 +217,12 @@ const cleanupOnProcessExit = () => {
 };
 process.once("exit", cleanupOnProcessExit);
 
-export default function (pi: ExtensionAPI) {
+// OMP sets OMPCODE only in the shells it spawns for tool calls, never in its
+// own extension-host process (verified against omp 17.1.8), so the runtime
+// cannot be read from the environment here. The .omp/extensions discovery entry
+// is what knows it is OMP, and it passes that in.
+export default function (pi: ExtensionAPI, options: { runtime?: "omp" } = {}) {
+  const isOmpRuntime = options.runtime === "omp";
   let generation = createGeneration();
   activateGeneration(generation);
 
@@ -467,6 +467,10 @@ export default function (pi: ExtensionAPI) {
     stopGeneration(generation);
   });
 
+  // OMP loads this extension only for the shared load marker and session lifecycle.
+  // OMP watcher supervision is owned by the hub process protocol in
+  // docs/supervision-protocols/omp.md, so the Pi-only arm tool and command stay
+  // unregistered there and no arm child is ever extension-owned on OMP.
   if (isOmpRuntime) {
     markLoaded();
     return;

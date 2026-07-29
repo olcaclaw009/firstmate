@@ -98,8 +98,10 @@ test_omp_extension_contract() {
     [ -L "$ROOT/.omp/extensions/$name" ] && \
       fail "OMP extension entry for $name must be a regular file so auto-discovery sees it"
     shim=$(cat "$ROOT/.omp/extensions/$name")
-    assert_contains "$shim" "export { default } from \"../../.pi/extensions/$name\"" \
+    assert_contains "$shim" "import extension from \"../../.pi/extensions/$name\"" \
       "OMP extension entry for $name does not delegate to the shared Pi implementation"
+    assert_contains "$shim" 'extension(pi, { runtime: "omp" })' \
+      "OMP extension entry for $name does not tell the shared implementation it is running on OMP"
   done
   count=0
   for entry in "$ROOT/.omp/extensions"/*; do
@@ -109,9 +111,15 @@ test_omp_extension_contract() {
   [ "$count" -eq 2 ] || \
     fail "OMP extension directory exposes $count entries, expected only the two supervision extensions"
 
-  watch=$(cat "$ROOT/.pi/extensions/fm-primary-pi-watch.ts")
-  assert_contains "$watch" 'process.env.OMPCODE === "1"' \
-    "the shared watcher extension does not detect the OMP runtime"
+  # OMP sets OMPCODE only in the shells it spawns, never in its own extension
+  # host, so in-process detection must come from the discovery entry argument.
+  for name in fm-primary-turnend-guard.ts fm-primary-pi-watch.ts; do
+    watch=$(cat "$ROOT/.pi/extensions/$name")
+    assert_contains "$watch" 'options.runtime === "omp"' \
+      "the shared $name extension does not take the OMP runtime from its discovery entry"
+    assert_not_contains "$watch" "process.env.OMPCODE" \
+      "the shared $name extension detects OMP through an environment marker OMP does not set in its extension host"
+  done
   pass "OMP exposes exactly the two shared supervision extensions as discoverable files"
 }
 

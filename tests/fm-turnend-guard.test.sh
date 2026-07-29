@@ -978,9 +978,10 @@ test_pi_extension_omp_session_stop_continuation() {
   fi
 
   repo="$TMP_ROOT/pi-extension-omp-session-stop"
-  mkdir -p "$repo/.pi/extensions/lib" "$repo/bin" "$repo/state"
+  mkdir -p "$repo/.pi/extensions/lib" "$repo/.omp/extensions" "$repo/bin" "$repo/state"
   cp "$ROOT/.pi/extensions/fm-primary-turnend-guard.ts" "$repo/.pi/extensions/fm-primary-turnend-guard.ts"
   cp "$ROOT/.pi/extensions/lib/fm-operational-input.ts" "$repo/.pi/extensions/lib/fm-operational-input.ts"
+  cp "$ROOT/.omp/extensions/fm-primary-turnend-guard.ts" "$repo/.omp/extensions/fm-primary-turnend-guard.ts"
   cp "$ROOT/bin/fm-operational-input.sh" "$repo/bin/fm-operational-input.sh"
   chmod +x "$repo/bin/fm-operational-input.sh"
   cat > "$repo/bin/fm-turnend-guard.sh" <<'SH'
@@ -992,26 +993,40 @@ exit 2
 SH
   cat > "$repo/bin/fm-sessionstart-nudge.sh" <<'SH'
 #!/usr/bin/env bash
-exit 0
+printf 'OMP_NUDGE_BODY\n'
 SH
   chmod +x "$repo/bin/fm-turnend-guard.sh" "$repo/bin/fm-sessionstart-nudge.sh"
 
+  # No OMPCODE: OMP never sets it inside its own extension host, so the OMP
+  # branches must come from loading through the .omp/extensions entry alone.
   out=$(cd "$repo" && \
-    OMPCODE=1 FM_HOME="$repo" FM_STATE_OVERRIDE="$repo/state" FM_GUARD_CALLS="$repo/guard.calls" \
+    FM_HOME="$repo" FM_STATE_OVERRIDE="$repo/state" FM_GUARD_CALLS="$repo/guard.calls" \
     node --input-type=module 2>&1 <<'JS'
 import { readFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 
+if (process.env.OMPCODE !== undefined) throw new Error("OMPCODE leaked into the OMP extension-host fixture");
 const extension = await import(
-  `${pathToFileURL(`${process.cwd()}/.pi/extensions/fm-primary-turnend-guard.ts`).href}?omp=${Date.now()}`
+  `${pathToFileURL(`${process.cwd()}/.omp/extensions/fm-primary-turnend-guard.ts`).href}?omp=${Date.now()}`
 );
 const handlers = new Map();
+const messages = [];
 const pi = {
   on(event, handler) {
     handlers.set(event, handler);
   },
+  sendMessage(message) {
+    messages.push(message);
+  },
 };
 extension.default(pi);
+
+// OMP emits session_start with no reason; the nudge must still run there.
+await handlers.get("session_start")?.({ type: "session_start" });
+if (messages.length !== 1 || !String(messages[0].content).includes("OMP_NUDGE_BODY")) {
+  throw new Error(`OMP session_start did not inject the nudge: ${JSON.stringify(messages)}`);
+}
+
 const stop = handlers.get("session_stop");
 if (typeof stop !== "function") throw new Error("session_stop handler was not registered");
 

@@ -8,7 +8,6 @@ import { encodeFirstmateOperationalInput } from "./lib/fm-operational-input.ts";
 
 let guardFollowupActive = false;
 let ompGuardContinuationActive = false;
-const isOmpRuntime = process.env.OMPCODE === "1";
 
 type LockOwnership = "owned" | "missing" | "other";
 
@@ -116,7 +115,13 @@ function blindTurnContent(stderr: string): string {
   );
 }
 
-export default function (pi: ExtensionAPI) {
+// OMP sets OMPCODE only in the shells it spawns for tool calls, never in its
+// own extension-host process (verified against omp 17.1.8), so the runtime
+// cannot be read from the environment here. The .omp/extensions discovery entry
+// is what knows it is OMP, and it passes that in.
+export default function (pi: ExtensionAPI, options: { runtime?: "omp" } = {}) {
+  const isOmpRuntime = options.runtime === "omp";
+
   pi.on?.("session_start", (event) => {
     const reason = String((event as { reason?: unknown }).reason ?? "");
     const shouldNudge = ["startup", "new", "resume"].includes(reason) ||
