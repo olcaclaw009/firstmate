@@ -11,6 +11,9 @@ fi
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 unset NO_MISTAKES_GATE
+# The tracked extensions this regression launches are marker-only under OMPCODE,
+# so an ambient OMP marker would disable the Pi watcher path under test.
+unset OMPCODE
 
 fail() {
   printf 'not ok - %s\n' "$1" >&2

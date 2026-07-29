@@ -5,6 +5,11 @@ set -u
 # shellcheck source=tests/lib.sh
 . "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
+# The shared watcher extension is marker-only under OMPCODE, so an ambient OMP
+# marker would make every Pi case load the OMP path. Cases that want the OMP
+# path set OMPCODE themselves.
+unset OMPCODE
+
 TMP_ROOT=$(fm_test_tmproot fm-pi-watch-extension)
 EXT="$ROOT/.pi/extensions/fm-primary-pi-watch.ts"
 # Node 24 warns when these test-only dynamic imports load tracked ESM plugins
