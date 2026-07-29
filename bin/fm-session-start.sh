@@ -46,9 +46,9 @@
 #                       script points back to the emitted harness supervision
 #                       block and deliberately never arms the watcher itself.
 #
-# On a Pi primary, the supervision-block step also checks whether Pi's two
-# tracked primary extensions are loaded and prints a PI_WATCH_EXTENSION
-# reminder line when one is missing.
+# On a Pi or OMP primary, the supervision-block step also checks whether the two
+# tracked primary extensions are loaded and prints a reminder line when one is
+# missing: PI_WATCH_EXTENSION on Pi, OMP_EXTENSIONS on OMP.
 #
 # Why lock first: the old documented order (bootstrap, THEN lock) let a
 # SECOND concurrent session run bootstrap's mutating sweeps - fast-forwarding

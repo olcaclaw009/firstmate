@@ -1,5 +1,10 @@
 // Firstmate primary watcher bridge for Pi.
 //
+// OMP loads this same file through the .omp/extensions delegating entry, but
+// only for the shared load marker and session lifecycle: the arm tool and
+// command below stay unregistered there because OMP's hub process protocol owns
+// the watcher cycle. Everything about generations below applies to Pi only.
+//
 // Session-generation ownership (stated once here):
 // Pi emits session_shutdown for ordinary same-process replacements (/new, /resume,
 // /fork, reload) as well as terminal quit. This extension binds one generation per
