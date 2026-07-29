@@ -184,11 +184,11 @@ test_tracked_harness_registration() {
   assert_contains "$opencode_plugin" 'fm-sessionstart-nudge.sh' "OpenCode plugin does not invoke the wrapper"
   assert_contains "$opencode_plugin" 'promptAsync' "OpenCode plugin does not prompt the nudge turn"
 
-  [ -L "$ROOT/.omp/extensions/fm-primary-turnend-guard.ts" ] || \
-    fail "OMP extension discovery symlink is not registered"
-  [ "$(readlink "$ROOT/.omp/extensions/fm-primary-turnend-guard.ts")" = \
-    ../../.pi/extensions/fm-primary-turnend-guard.ts ] || \
-    fail "OMP extension discovery symlink does not expose the shared primary extension"
+  [ -f "$ROOT/.omp/extensions/fm-primary-turnend-guard.ts" ] || \
+    fail "OMP extension discovery entry is not registered"
+  assert_contains "$(cat "$ROOT/.omp/extensions/fm-primary-turnend-guard.ts")" \
+    'export { default } from "../../.pi/extensions/fm-primary-turnend-guard.ts"' \
+    "OMP extension discovery entry does not expose the shared primary extension"
 
   pass "all verified primary harnesses register the shared session-start nudge"
 }

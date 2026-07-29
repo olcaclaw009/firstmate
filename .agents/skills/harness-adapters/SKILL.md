@@ -104,7 +104,7 @@ Claude's Stop `asyncRewake` hook (`bin/fm-claude-stop-autoarm.sh`) owns tokenles
 Codex uses bounded foreground checkpoints through `bin/fm-watch-checkpoint.sh` because Codex cannot reason while a foreground tool call is running.
 OpenCode uses `.opencode/plugins/fm-primary-watch-arm.js`, which coordinates with the turn-end guard plugin and wakes the TUI with `client.session.promptAsync`.
 Pi and pi-signed use the tracked `.pi/extensions/fm-primary-turnend-guard.ts` plus the tracked `.pi/extensions/fm-primary-pi-watch.ts`, both project-local extensions the Pi engine auto-discovers once trusted.
-Omp discovers the same two tracked files through per-file symlinks in `.omp/extensions`, uses `session_stop` as the turn-end backstop, and uses OMP `hub` process `start` plus `wait` for the normal watcher cycle instead of the Pi-only `fm_watch_arm_pi` tool.
+Omp discovers the same two tracked implementations through delegating entry files in `.omp/extensions`, uses `session_stop` as the turn-end backstop, and uses OMP `hub` process `start` plus `wait` for the normal watcher cycle; the Pi-only `fm_watch_arm_pi` tool is not registered on OMP.
 When changing any primary watcher adapter, update `docs/supervision-protocols/`, `docs/turnend-guard.md` if a shared idle or turn-end hook changed, and the relevant concise fact below.
 
 ## Launch profile axes
@@ -314,7 +314,8 @@ If firstmate runs on OMP and no concrete worker adapter is configured, `fm-spawn
 |---|---|
 | Own-runtime env marker | `OMPCODE=1`; OMP also sets `CLAUDECODE=1`, so `OMPCODE` precedence is load-bearing. |
 | Process ancestry | `omp` -> `-zsh` -> terminal for tool calls; session-lock ancestry accepts exact `omp` and uses `basename --` for leading-dash shells. |
-| Extension discovery | OMP discovers `.omp/extensions`; this repo tracks one per-file symlink there for each shared supervision extension (`fm-primary-turnend-guard.ts`, `fm-primary-pi-watch.ts`) so exactly those load without duplicating files. |
+| Extension discovery | OMP auto-discovers regular `*.ts` files in `.omp/extensions`; this repo tracks one delegating entry file per shared supervision extension (`fm-primary-turnend-guard.ts`, `fm-primary-pi-watch.ts`) that re-exports the `.pi` implementation, so exactly those two load without duplicating logic. |
+| Watcher tool | The shared watcher extension is marker-only on OMP: it registers no `fm_watch_arm_pi` tool or `/fm-watch-arm-pi` command there, so the `hub` protocol is the single owner of the watcher cycle. |
 | Turn-end guard | The shared primary extension uses OMP's `session_stop` continuation to force one bounded follow-up when `bin/fm-turnend-guard.sh` returns 2. |
 | Watcher protocol | `docs/supervision-protocols/omp.md` owns the OMP `hub` process `start` plus `wait` cycle around `bin/fm-watch-arm.sh --restart`. |
 | Calm presentation | Not available on OMP and deferred to a follow-up; `.pi/extensions/fm-calm.ts` stays Pi-only and is intentionally not exposed to OMP. |

@@ -90,14 +90,16 @@ test_omp_session_lock_identity() {
 }
 
 test_omp_extension_contract() {
-  local name target entry count
+  local name shim entry count watch
   [ -d "$ROOT/.omp/extensions" ] || fail "OMP extension discovery directory is missing"
   [ -L "$ROOT/.omp/extensions" ] && fail "OMP extension discovery must not be a directory symlink"
   for name in fm-primary-turnend-guard.ts fm-primary-pi-watch.ts; do
-    [ -L "$ROOT/.omp/extensions/$name" ] || fail "OMP extension symlink for $name is missing"
-    target=$(readlink "$ROOT/.omp/extensions/$name")
-    [ "$target" = "../../.pi/extensions/$name" ] || \
-      fail "OMP extension symlink for $name points to '$target'"
+    [ -f "$ROOT/.omp/extensions/$name" ] || fail "OMP extension entry for $name is missing"
+    [ -L "$ROOT/.omp/extensions/$name" ] && \
+      fail "OMP extension entry for $name must be a regular file so auto-discovery sees it"
+    shim=$(cat "$ROOT/.omp/extensions/$name")
+    assert_contains "$shim" "export { default } from \"../../.pi/extensions/$name\"" \
+      "OMP extension entry for $name does not delegate to the shared Pi implementation"
   done
   count=0
   for entry in "$ROOT/.omp/extensions"/*; do
@@ -106,33 +108,48 @@ test_omp_extension_contract() {
   done
   [ "$count" -eq 2 ] || \
     fail "OMP extension directory exposes $count entries, expected only the two supervision extensions"
-  pass "OMP exposes exactly the two shared supervision extensions through per-file symlinks"
+
+  watch=$(cat "$ROOT/.pi/extensions/fm-primary-pi-watch.ts")
+  assert_contains "$watch" 'process.env.OMPCODE === "1"' \
+    "the shared watcher extension does not detect the OMP runtime"
+  pass "OMP exposes exactly the two shared supervision extensions as discoverable files"
 }
 
 test_omp_extensions_load() {
-  local home out status
+  local home out status name marker source expected
   if ! command -v omp >/dev/null 2>&1; then
     echo "skip: omp not found for OMP extension-load smoke"
     return 0
   fi
   home="$TMP_ROOT/extension-load-home"
   mkdir -p "$home/config" "$home/state"
-  out=$(cd /tmp && \
+  out=$(cd "$ROOT" && \
     FM_HOME="$home" FM_STATE_OVERRIDE="$home/state" FM_ROOT_OVERRIDE="$ROOT" \
-    omp -p --max-time=30 --no-session --no-tools \
-      -e "$ROOT/.omp/extensions/fm-primary-turnend-guard.ts" \
-      -e "$ROOT/.omp/extensions/fm-primary-pi-watch.ts" \
-      "reply exactly OMP_EXT_OK" 2>&1)
+    omp -p --max-time=30 --no-session --no-tools "reply exactly OMP_EXT_OK" 2>&1)
   status=$?
   expect_code 0 "$status" "OMP extension-load smoke should succeed: $out"
   assert_contains "$out" "OMP_EXT_OK" "OMP extension-load smoke did not complete the prompt"
   assert_not_contains "$out" "Failed to load extension" "OMP reported an extension load failure"
   assert_not_contains "$out" "Extension error" "OMP reported an extension runtime error"
   assert_present "$home/state/.pi-turnend-extension-loaded" \
-    "OMP did not load the shared turn-end extension"
+    "OMP auto-discovery did not load the shared turn-end extension"
   assert_present "$home/state/.pi-watch-extension-loaded" \
-    "OMP did not load the shared watcher extension"
-  pass "OMP loads both shared supervision extensions with zero load errors"
+    "OMP auto-discovery did not load the shared watcher extension"
+
+  # bin/fm-session-start.sh compares the marker against the shared .pi file, so
+  # the discovery entry must not change which file the extension hashes.
+  for name in turnend:fm-primary-turnend-guard watch:fm-primary-pi-watch; do
+    marker="$home/state/.pi-${name%%:*}-extension-loaded"
+    source="$ROOT/.pi/extensions/${name#*:}.ts"
+    if command -v shasum >/dev/null 2>&1; then
+      expected="sha256:$(shasum -a 256 "$source" | awk '{print $1}')"
+    else
+      expected="sha256:$(sha256sum "$source" | awk '{print $1}')"
+    fi
+    [ "$(sed -n '1p' "$marker")" = "$expected" ] || \
+      fail "OMP marker for ${name#*:} does not carry the shared .pi extension version"
+  done
+  pass "OMP auto-discovers both shared supervision extensions with zero load errors"
 }
 
 test_omp_env_marker_precedes_claudecode

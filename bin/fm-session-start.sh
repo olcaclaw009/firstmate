@@ -312,6 +312,11 @@ X_MODE_PRESENT=0
 [ -f "$CONFIG/x-mode.env" ] && X_MODE_PRESENT=1
 
 if [ "$PRIMARY_HARNESS" = pi ] || [ "$PRIMARY_HARNESS" = pi-signed ] || [ "$PRIMARY_HARNESS" = omp ]; then
+  # The extensions stamp their marker with the hash of the file that actually
+  # runs, which stays the shared .pi implementation even when OMP discovers it
+  # through the .omp/extensions delegating entry.
+  PI_WATCH_SOURCE="$FM_ROOT/.pi/extensions/fm-primary-pi-watch.ts"
+  PI_TURNEND_SOURCE="$FM_ROOT/.pi/extensions/fm-primary-turnend-guard.ts"
   if [ "$PRIMARY_HARNESS" = omp ]; then
     PI_EXT="$FM_ROOT/.omp/extensions/fm-primary-pi-watch.ts"
     PI_TURNEND_EXT="$FM_ROOT/.omp/extensions/fm-primary-turnend-guard.ts"
@@ -319,8 +324,8 @@ if [ "$PRIMARY_HARNESS" = pi ] || [ "$PRIMARY_HARNESS" = pi-signed ] || [ "$PRIM
     PI_LOAD_HINT='restart'
     PI_LABEL=OMP_EXTENSIONS
   else
-    PI_EXT="$FM_ROOT/.pi/extensions/fm-primary-pi-watch.ts"
-    PI_TURNEND_EXT="$FM_ROOT/.pi/extensions/fm-primary-turnend-guard.ts"
+    PI_EXT="$PI_WATCH_SOURCE"
+    PI_TURNEND_EXT="$PI_TURNEND_SOURCE"
     PI_RESTART_COMMAND=$PRIMARY_HARNESS
     [ "$PRIMARY_HARNESS" != pi ] || PI_RESTART_COMMAND='plain pi'
     PI_LOAD_HINT='approve Pi project trust once per clone, then restart'
@@ -329,8 +334,8 @@ if [ "$PRIMARY_HARNESS" = pi ] || [ "$PRIMARY_HARNESS" = pi-signed ] || [ "$PRIM
   PI_WATCH_MARKER="$STATE/.pi-watch-extension-loaded"
   PI_TURNEND_MARKER="$STATE/.pi-turnend-extension-loaded"
   PI_LOCK="$STATE/.lock"
-  PI_WATCH_VERSION=$(hash_file "$PI_EXT" || printf '')
-  PI_TURNEND_VERSION=$(hash_file "$PI_TURNEND_EXT" || printf '')
+  PI_WATCH_VERSION=$(hash_file "$PI_WATCH_SOURCE" || printf '')
+  PI_TURNEND_VERSION=$(hash_file "$PI_TURNEND_SOURCE" || printf '')
   if ! pi_extension_loaded "$PI_WATCH_MARKER" "$PI_WATCH_VERSION" "$PI_LOCK" \
     || ! pi_extension_loaded "$PI_TURNEND_MARKER" "$PI_TURNEND_VERSION" "$PI_LOCK"; then
     printf '%s: not loaded - %s %s so %s and %s auto-load for turn-end guard and background wake coverage; use -e %s -e %s only if project extensions are not trusted\n' "$PI_LABEL" "$PI_LOAD_HINT" "$PI_RESTART_COMMAND" "$PI_TURNEND_EXT" "$PI_EXT" "$PI_TURNEND_EXT" "$PI_EXT"

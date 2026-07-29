@@ -18,5 +18,5 @@ OMP does not use Claude's Stop `asyncRewake` auto-arm contract.
 It has a `session_stop` extension continuation hook, which the tracked turn-end guard extension uses as a backstop when a turn would otherwise end blind, but routine watcher arm and re-arm remain explicit OMP hub process operations.
 
 The turn-end guard extension lives at `__FM_PI_TURNEND_EXT__`.
-The watcher extension lives at `__FM_PI_EXT__` and is loaded for shared Firstmate extension support, but the OMP supervision protocol above uses `hub` rather than the Pi-only watcher tool.
-Both files are exposed to OMP through tracked per-file symlinks in `.omp/extensions`, which are the only extensions OMP discovers from this repo.
+The watcher extension lives at `__FM_PI_EXT__` and is loaded only for the shared load marker and session lifecycle; it registers no watcher tool on OMP, so `hub` is the single owner of the cycle.
+Both files are exposed to OMP through tracked delegating entry files in `.omp/extensions`, which are the only extensions OMP discovers from this repo.

@@ -1234,6 +1234,63 @@ EOF
   pass "Pi process-exit cleanup stops the attached arm child"
 }
 
+test_omp_runtime_marks_loaded_without_pi_watch_tool() {
+  local repo home plugin out status
+  repo="$TMP_ROOT/omp-marker-only-root"
+  home="$TMP_ROOT/omp-marker-only-home"
+  mkdir -p "$repo/bin" "$home/state" "$home/config"
+  install_pi_watch_extension_fixture "$repo"
+  plugin="$repo/.pi/extensions/fm-primary-pi-watch.ts"
+  cat > "$repo/bin/fm-watch-arm.sh" <<'SH'
+#!/usr/bin/env bash
+printf 'armed\n' >> "$FM_ARM_LOG"
+SH
+  chmod +x "$repo/bin/fm-watch-arm.sh"
+  out=$(PLUGIN="$plugin" OMPCODE=1 FM_HOME="$home" FM_ROOT_OVERRIDE="$repo" \
+    FM_ARM_LOG="$TMP_ROOT/omp-marker-only-arm.log" node --input-type=module 2>&1 <<'EOF'
+import { existsSync, writeFileSync } from "node:fs";
+import { pathToFileURL } from "node:url";
+
+const registeredTools = [];
+const registeredCommands = [];
+const handlers = new Map();
+const pi = {
+  on(event, handler) {
+    handlers.set(event, handler);
+  },
+  registerCommand(name) {
+    registeredCommands.push(name);
+  },
+  registerTool(candidate) {
+    registeredTools.push(candidate.name);
+  },
+  sendUserMessage: async () => {},
+};
+writeFileSync(`${process.env.FM_HOME}/state/.lock`, `${process.pid}\n`);
+const mod = await import(pathToFileURL(process.env.PLUGIN).href);
+mod.default(pi);
+if (registeredTools.length > 0) {
+  throw new Error(`OMP registered Pi-only tools: ${registeredTools.join(", ")}`);
+}
+if (registeredCommands.length > 0) {
+  throw new Error(`OMP registered Pi-only commands: ${registeredCommands.join(", ")}`);
+}
+if (!existsSync(`${process.env.FM_HOME}/state/.pi-watch-extension-loaded`)) {
+  throw new Error("OMP load marker was not written");
+}
+await handlers.get("session_start")?.({ type: "session_start" }, {});
+if (!existsSync(`${process.env.FM_HOME}/state/.pi-watch-extension-loaded`)) {
+  throw new Error("OMP session_start did not refresh the load marker");
+}
+EOF
+)
+  status=$?
+  expect_code 0 "$status" "OMP must load the watcher extension as marker-only: $out"
+  [ -z "$out" ] || fail "OMP marker-only test printed output: $out"
+  [ -f "$TMP_ROOT/omp-marker-only-arm.log" ] && fail "OMP watcher extension started an arm child"
+  pass "OMP loads the watcher extension for its marker without the Pi-only arm tool or command"
+}
+
 test_opencode_primary_watch_plugin_static_wiring() {
   local plugin module_boundary text
   plugin="$ROOT/.opencode/plugins/fm-primary-watch-arm.js"
@@ -2219,6 +2276,7 @@ test_pi_arm_distinguishes_session_lock_ownership
 test_pi_session_transition_generation_owner
 test_pi_process_exit_cleanup_listener_lifecycle
 test_pi_process_exit_cleanup_stops_arm_child
+test_omp_runtime_marks_loaded_without_pi_watch_tool
 test_opencode_primary_watch_plugin_static_wiring
 test_opencode_plugin_package_boundary_is_explicit_esm
 test_opencode_primary_watch_plugin_uses_effective_state_home

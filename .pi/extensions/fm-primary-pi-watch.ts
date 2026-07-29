@@ -96,6 +96,11 @@ const armReadyTimeoutMs = positiveInteger(
   process.platform === "win32" ? 35000 : 12000,
 );
 const armRetireTimeoutMs = positiveInteger("FM_WATCH_ARM_RETIRE_TIMEOUT_MS", 1000);
+// OMP loads this extension only for the shared load marker and session lifecycle.
+// OMP watcher supervision is owned by the hub process protocol in
+// docs/supervision-protocols/omp.md, so the Pi-only arm tool and command stay
+// unregistered there and no arm child is ever extension-owned on OMP.
+const isOmpRuntime = process.env.OMPCODE === "1";
 const repairOnlyHint = "call fm_watch_arm_pi again only after a later notification says the cycle is missing, failed, or unhealthy";
 const shuttingDownMessage = "watcher: not armed - Pi session is shutting down";
 
@@ -461,6 +466,11 @@ export default function (pi: ExtensionAPI) {
   pi.on?.("session_shutdown", () => {
     stopGeneration(generation);
   });
+
+  if (isOmpRuntime) {
+    markLoaded();
+    return;
+  }
 
   pi.registerCommand?.("fm-watch-arm-pi", {
     description: "Arm firstmate watcher supervision through the Pi extension instead of foreground bash.",
