@@ -205,7 +205,6 @@ count=\$((count + 1))
 printf '%s\\n' "\$count" > '$clock_calls'
 case "\$count" in
   1|2) printf '100\\n' ;;
-  3) printf '101\\n' ;;
   *) printf '101\\n' ;;
 esac
 SH
@@ -880,7 +879,7 @@ test_an_oversized_budget_is_cut_to_fit_and_reported() {
   report=$(cat "$out")
   # The cut leaves room for the whole-second rounding and the kill grace as well
   # as one probe bound, so a cut sweep really does end before the watcher bound.
-  assert_contains "$report" "sweep budget 60s cut to 27s to stay inside the watcher check timeout of 30s" "a budget that cannot fit the watcher bound was not cut and reported"
+  assert_contains "$report" "sweep budget 60s cut to 26s to stay inside the watcher check timeout of 30s" "a budget that cannot fit the watcher bound was not cut and reported"
   assert_contains "$report" "herdr update not in effect" "the detector went quiet instead of sweeping with the cut budget"
 
   # The default budget of 20s fits the default bound, so it is used as written.

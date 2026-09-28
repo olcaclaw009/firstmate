@@ -169,9 +169,9 @@ CHECK_TIMEOUT=${FM_CHECK_TIMEOUT:-30}
 case "$CHECK_TIMEOUT" in
   ''|*[!0-9]*|0) CHECK_TIMEOUT=30 ;;
 esac
-# The last probe of a sweep can end this far past the deadline, so that is what
-# the budget has to leave the watcher's own bound.
-BUDGET_MAX=$((CHECK_TIMEOUT - PROBE_MIN_SECS - CLOCK_ROUNDING_SECS - KILL_GRACE_SECS))
+# The deadline carries one rounding second and the last probe of a sweep can end
+# this far past it, so that is what the budget has to leave the watcher's bound.
+BUDGET_MAX=$((CHECK_TIMEOUT - PROBE_MIN_SECS - 2 * CLOCK_ROUNDING_SECS - KILL_GRACE_SECS))
 [ "$BUDGET_MAX" -ge 1 ] || BUDGET_MAX=1
 # Cut rather than refuse. A refusal is reported once and then suppressed by the
 # no-nag gate, which leaves the detector dead and quiet, and a check that goes
