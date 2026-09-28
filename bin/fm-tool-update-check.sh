@@ -49,7 +49,8 @@
 # FM_TOOL_UPDATE_INTERVAL (default 900, 0 disables the gate, otherwise 60..86400)
 # and stays silent in between. Each probe is bounded by
 # FM_TOOL_UPDATE_PROBE_SECS (default 5, valid 1..30) and a whole sweep by
-# FM_TOOL_UPDATE_BUDGET_SECS (default 20, valid 1..120).
+# FM_TOOL_UPDATE_BUDGET_SECS (default 20, valid 1..120), plus up to one second
+# for whole-second clock rounding.
 #
 # The sweep has to finish inside the watcher's own per check bound, because a run
 # the watcher kills prints nothing and writes no record, so it would repeat that
@@ -168,9 +169,9 @@ CHECK_TIMEOUT=${FM_CHECK_TIMEOUT:-30}
 case "$CHECK_TIMEOUT" in
   ''|*[!0-9]*|0) CHECK_TIMEOUT=30 ;;
 esac
-# The last probe of a sweep can end this far past the deadline, so that is what
-# the budget has to leave the watcher's own bound.
-BUDGET_MAX=$((CHECK_TIMEOUT - PROBE_MIN_SECS - CLOCK_ROUNDING_SECS - KILL_GRACE_SECS))
+# The deadline carries one rounding second and the last probe of a sweep can end
+# this far past it, so that is what the budget has to leave the watcher's bound.
+BUDGET_MAX=$((CHECK_TIMEOUT - PROBE_MIN_SECS - 2 * CLOCK_ROUNDING_SECS - KILL_GRACE_SECS))
 [ "$BUDGET_MAX" -ge 1 ] || BUDGET_MAX=1
 # Cut rather than refuse. A refusal is reported once and then suppressed by the
 # no-nag gate, which leaves the detector dead and quiet, and a check that goes
@@ -717,7 +718,9 @@ action_check() {
     return 0
   fi
 
-  DEADLINE=$(($(real_epoch) + BUDGET_SECS))
+  # real_epoch has whole-second precision. Add the reserved rounding second so
+  # a sweep that starts near a second boundary still gets its configured time.
+  DEADLINE=$(($(real_epoch) + BUDGET_SECS + CLOCK_ROUNDING_SECS))
 
   if [ -n "$BUDGET_CUT_FROM" ]; then
     emit "sweep budget ${BUDGET_CUT_FROM}s cut to ${BUDGET_SECS}s to stay inside the watcher check timeout of ${CHECK_TIMEOUT}s"

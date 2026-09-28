@@ -187,6 +187,53 @@ test_one_copy_reached_twice_is_probed_once() {
   pass "one copy reached through two PATH entries is probed once as one install"
 }
 
+test_multiple_fast_tools_keep_the_full_sweep_budget() {
+  local home first second clock_dir clock_calls out
+  home=$(make_home multiple-fast)
+  first="$TMP_ROOT/multiple-fast/first/bin"
+  second="$TMP_ROOT/multiple-fast/second/bin"
+  clock_dir="$TMP_ROOT/multiple-fast/clock/bin"
+  clock_calls="$TMP_ROOT/multiple-fast/clock-calls"
+  make_copy "$first" first-fast-fixture '1.2.3'
+  make_copy "$second" second-fast-fixture '1.2.3'
+  mkdir -p "$clock_dir"
+  cat > "$clock_dir/date" <<SH
+#!/usr/bin/env bash
+count=0
+[ ! -f '$clock_calls' ] || count=\$(cat '$clock_calls')
+count=\$((count + 1))
+printf '%s\\n' "\$count" > '$clock_calls'
+case "\$count" in
+  1|2) printf '100\\n' ;;
+  *) printf '101\\n' ;;
+esac
+SH
+  chmod 0755 "$clock_dir/date"
+  write_config "$home" '{"tools":[{"name":"first","command":"first-fast-fixture"},{"name":"second","command":"second-fast-fixture"}]}'
+  out="$home/out.txt"
+  env FM_HOME="$home" PATH="$(fixture_path "$first:$second:$clock_dir")" \
+    FM_TOOL_UPDATE_INTERVAL=0 FM_TOOL_UPDATE_BUDGET_SECS=1 FM_TOOL_UPDATE_NOW=100 \
+    "$CHECK" >"$out" 2>&1
+  [ ! -s "$out" ] || fail "two fast tools were reported incomplete near a second boundary: $(cat "$out")"
+  pass "two fast tools complete when the sweep starts near a whole-second boundary"
+}
+
+test_a_slow_tool_is_bounded_and_reported() {
+  local home slow fast out report
+  home=$(make_home slow-tool)
+  slow="$TMP_ROOT/slow-tool/slow/bin"
+  fast="$TMP_ROOT/slow-tool/fast/bin"
+  make_slow_copy "$slow" slow-tool-fixture 30
+  make_copy "$fast" fast-tool-fixture '1.2.3'
+  write_config "$home" '{"tools":[{"name":"slow","command":"slow-tool-fixture"},{"name":"fast","command":"fast-tool-fixture"}]}'
+  out="$home/out.txt"
+  run_check "$home" "$(fixture_path "$slow:$fast")" "$out" \
+    FM_TOOL_UPDATE_PROBE_SECS=1 FM_TOOL_UPDATE_BUDGET_SECS=2
+  report=$(cat "$out")
+  assert_contains "$report" "slow check failed: $slow/slow-tool-fixture did not report a version" "a genuinely slow tool was not reported as a bounded probe failure"
+  pass "a slow tool is bounded and reported without hanging the sweep"
+}
+
 test_unreadable_version_is_a_failure_not_a_pass() {
   local home dir out report
   # A copy that will not say what it is cannot be called current.
@@ -832,7 +879,7 @@ test_an_oversized_budget_is_cut_to_fit_and_reported() {
   report=$(cat "$out")
   # The cut leaves room for the whole-second rounding and the kill grace as well
   # as one probe bound, so a cut sweep really does end before the watcher bound.
-  assert_contains "$report" "sweep budget 60s cut to 27s to stay inside the watcher check timeout of 30s" "a budget that cannot fit the watcher bound was not cut and reported"
+  assert_contains "$report" "sweep budget 60s cut to 26s to stay inside the watcher check timeout of 30s" "a budget that cannot fit the watcher bound was not cut and reported"
   assert_contains "$report" "herdr update not in effect" "the detector went quiet instead of sweeping with the cut budget"
 
   # The default budget of 20s fits the default bound, so it is used as written.
@@ -1059,6 +1106,8 @@ test_path_skew_is_reported_from_every_copy
 test_newest_copy_first_on_path_is_silent
 test_identical_versions_are_silent
 test_one_copy_reached_twice_is_probed_once
+test_multiple_fast_tools_keep_the_full_sweep_budget
+test_a_slow_tool_is_bounded_and_reported
 test_unreadable_version_is_a_failure_not_a_pass
 test_missing_command_is_reported
 test_announced_update_is_reported_from_the_tool_itself
