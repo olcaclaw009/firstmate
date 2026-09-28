@@ -1,0 +1,27 @@
+== S1 three fast tools, BUDGET_SECS=1 (run 1)
+   exit=0 wall=1.33s
+   output: <silent>
+== S1 three fast tools, BUDGET_SECS=1 (run 2)
+   exit=0 wall=0.17s
+   output: <silent>
+== S1 three fast tools, BUDGET_SECS=1 (run 3)
+   exit=0 wall=0.18s
+   output: <silent>
+== S1 three fast tools, BUDGET_SECS=1 (run 4)
+   exit=0 wall=0.16s
+   output: <silent>
+== S1 three fast tools, BUDGET_SECS=1 (run 5)
+   exit=0 wall=0.16s
+   output: <silent>
+== S2 default budget, three fast tools
+   exit=0 wall=0.17s
+   output: <silent>
+== S3 hung tool then fast tool, probe 1s, budget 2s
+   exit=0 wall=1.49s
+   output: tool updates: hung check failed: /var/folders/80/gg0fs97x75q857q74d1tdfb80000gn/T//fm-lab.T1XMHm/bin/hung-fx did not report a version
+== S4 adversarial: budget 60 cut, watcher timeout 30, tools hang TERM-ignoring (must finish <30s and print)
+   exit=0 wall=27.12s
+   output: tool updates: sweep budget 60s cut to 26s to stay inside the watcher check timeout of 30s; h1 check failed: /var/folders/80/gg0fs97x75q857q74d1tdfb80000gn/T//fm-lab.T1XMHm/bin/hung-fx did not report a version; h2 check failed: /var/folders/80/gg0fs97x75q857q74d1tdfb80000gn/T//fm-lab.T1XMHm/bin/hung-fx did not report a version; h3 check failed: /var/folders/80/gg0fs97x75q857q74d1tdfb80000gn/T//fm-lab.T1XMHm/bin/hung-fx did not report a version; h4 check failed: /var/folders/80/gg0fs97x75q857q74d1tdfb80000gn/T//fm-lab.T1XMHm/bin/hung-fx did not report a version; h5 check failed: /var/folders/80/gg0fs97x75q857q74d1tdfb80000gn/T//fm-lab.T1XMHm/bin/hung-fx did not report a version; check incomplete: the time budget ran out before h6
+== S5 adversarial: tight watcher timeout 10, budget 20 cut, hung tools (must finish <10s and print)
+   exit=0 wall=7.12s
+   output: tool updates: sweep budget 20s cut to 6s to stay inside the watcher check timeout of 10s; h1 check failed: /var/folders/80/gg0fs97x75q857q74d1tdfb80000gn/T//fm-lab.T1XMHm/bin/hung-fx did not report a version; h2 check failed: /var/folders/80/gg0fs97x75q857q74d1tdfb80000gn/T//fm-lab.T1XMHm/bin/hung-fx did not report a version; check incomplete: the time budget ran out before h3
